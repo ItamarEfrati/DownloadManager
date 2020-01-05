@@ -1,4 +1,5 @@
 import java.io.*;
+import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -26,7 +27,13 @@ public class Main {
             urlList.add(urlPath);
         }
 
-        DownloadManager downloadManager = new DownloadManager(urlList, numOfThreads);
+
+        DownloadManager downloadManager = null;
+        try {
+            downloadManager = new DownloadManager(urlList, numOfThreads);
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        }
         downloadManager.run();
     }
 
