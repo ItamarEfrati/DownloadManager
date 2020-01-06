@@ -3,13 +3,13 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.ProtocolException;
 import java.net.URL;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ArrayBlockingQueue;
 
 public class PacketDownloader implements Runnable {
 
 
     //region Fields
-    private ConcurrentLinkedQueue<DataWrapper> packetQueue;
+    private ArrayBlockingQueue<DataWrapper> packetQueue;
     private URL source;
     private long packetPosition;
     private final long fileSize;
@@ -17,7 +17,7 @@ public class PacketDownloader implements Runnable {
 
     //region Constructor
 
-    PacketDownloader(ConcurrentLinkedQueue<DataWrapper> packetQueue, URL source, long packetPosition, long fileSize) {
+    PacketDownloader(ArrayBlockingQueue<DataWrapper> packetQueue, URL source, long packetPosition, long fileSize) {
         this.packetQueue = packetQueue;
         this.source = source;
         this.packetPosition = packetPosition;
