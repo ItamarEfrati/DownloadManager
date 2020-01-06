@@ -1,13 +1,14 @@
+
 public class DataWrapper {
 
     //region Fields
-    private static final int BUFFER_SIZE = 1024
-    private int packetNumber;
-    private byte[] packet = new byte[BUFFER_SIZE];
+    private static final int BUFFER_SIZE = 1024;
+    private long packetNumber;
+    private byte[] packet;
     //endregion
 
     //region Constructor
-    public DataWrapper(int packetNumber, byte[] packet){
+    public DataWrapper(long packetNumber, byte[] packet){
         this.packetNumber = packetNumber;
         this.packet = packet;
     }
@@ -19,11 +20,11 @@ public class DataWrapper {
         return BUFFER_SIZE;
     }
 
-    public int getPacketNumber() {
+    public long getPacketNumber() {
         return packetNumber;
     }
 
-    public void setPacketNumber(int packetNumber) {
+    public void setPacketNumber(long packetNumber) {
         this.packetNumber = packetNumber;
     }
 
