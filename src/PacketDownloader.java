@@ -3,24 +3,25 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.ProtocolException;
 import java.net.URL;
-import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 
 public class PacketDownloader implements Runnable {
-
-
     //region Fields
-    private ArrayBlockingQueue<DataWrapper> packetQueue;
+    private LinkedBlockingDeque<DataWrapper> packetQueue;
     private URL source;
-    private long packetPosition;
-    private final long fileSize;
+    private long packetStartPosition;
+    private long packetEndPosition;
+    private long fileSize;
     //endregion
 
     //region Constructor
 
-    PacketDownloader(ArrayBlockingQueue<DataWrapper> packetQueue, URL source, long packetPosition, long fileSize) {
+    PacketDownloader(LinkedBlockingDeque<DataWrapper> packetQueue, URL source,
+                     long packetStartPosition, long packetEndPosition, long fileSize) {
         this.packetQueue = packetQueue;
         this.source = source;
-        this.packetPosition = packetPosition;
+        this.packetStartPosition = packetStartPosition;
+        this.packetEndPosition = packetEndPosition;
         this.fileSize = fileSize;
     }
     //endregion
@@ -77,26 +78,16 @@ public class PacketDownloader implements Runnable {
     private void downloadPacket(InputStream inputStream) {
         try {
             byte[] buffer = inputStream.readAllBytes();
-            DataWrapper dataWrapper = new DataWrapper(this.packetPosition, buffer);
+            DataWrapper dataWrapper = new DataWrapper(this.packetStartPosition, buffer);
             this.packetQueue.add(dataWrapper);
         } catch (IOException e) {
-            System.err.printf("Fail to download packet %d from %s\n", this.packetPosition, this.source.toString());
+            System.err.printf("Fail to download packet %d from %s\n", this.packetStartPosition, this.source.toString());
         }
     }
 
-    /**
-     * This function create the string of the range which is the value of the Content-Range header of the http request
-     *
-     * @return String, the value of the Content-Range header
-     */
-    private String get_byte_range() {
-        long packetStartByte = this.packetPosition * DataWrapper.getBufferSize();
-        long packetEndByte = packetStartByte + DataWrapper.getBufferSize();
-        boolean isRangeValid = packetEndByte < this.fileSize;
-        packetEndByte = isRangeValid ? packetEndByte : this.fileSize;
-        return String.format("bytes %d-%d/%d", packetStartByte, packetEndByte, this.fileSize);
+    private String get_byte_range(){
+        return String.format("bytes %d-%d/%d", packetStartPosition, packetEndPosition, this.fileSize);
     }
-
     //endregion
 }
 

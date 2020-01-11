@@ -9,6 +9,7 @@ public class IdcDm {
     public static List<URL> parseArguments(String urlArgument) {
         List<URL> urlsList = new ArrayList<>();
         boolean isUrlList = !urlArgument.startsWith("http://");
+
         try {
             if (isUrlList) {
                 Scanner scanner = new Scanner(new File(urlArgument));
@@ -25,6 +26,7 @@ public class IdcDm {
         } catch (FileNotFoundException e) {
             System.err.println("Fail to execute program, can't find urls list file");
         }
+
         return urlsList;
     }
 
@@ -32,16 +34,21 @@ public class IdcDm {
         int numberOfThreads = 0;
         List<URL> urlsList = null;
         boolean isNumOfThreadProvided = args.length == 2;
+
         try {
             numberOfThreads = isNumOfThreadProvided ? Integer.parseInt(args[1]) : 1;
         } catch (NumberFormatException e) {
             System.err.println("Fail to execute program, invalid number of threads");
         }
+
         boolean isThreadsArgumentValid = numberOfThreads > 0;
+
         if(isThreadsArgumentValid) {
             urlsList = parseArguments(args[0]);
         }
+
         boolean isUrlArgumentValid = urlsList != null && urlsList.size() > 0;
+
         if(isUrlArgumentValid) {
             DownloadManager downloadManager = new DownloadManager(urlsList, numberOfThreads);
             downloadManager.run();
