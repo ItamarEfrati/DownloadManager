@@ -3,16 +3,41 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
 
 public class MetaData implements Serializable {
     //region Fields
+    private String tempSerializationPath;
     private String serializationPath;
-    private boolean[] rangesStatus;
+    private Boolean[] rangesStatus;
+    private int downloadCounter = 0;
     //endregion Fields
 
-    public MetaData(int rangesAmount, String serializationPath){
-        rangesStatus = new boolean[rangesAmount];
+    private MetaData(int rangesAmount, String serializationPath){
+        rangesStatus = initRangesStatus(rangesAmount);
         this.serializationPath = serializationPath;
+        tempSerializationPath = "temp-" + this.serializationPath;
+    }
+
+    private Boolean[] initRangesStatus(int rangesAmount) {
+        Boolean[] bs = new Boolean[rangesAmount];
+
+        Arrays.fill(bs, false);
+
+        return bs;
+    }
+
+    public static MetaData GetMetaData(int rangesAmount, String serializationPath){
+        MetaData metaData = null;
+        boolean isDownloadResumed = false; // TODO: check the real value
+
+        if(isDownloadResumed){
+            metaData = ReadFromDisk(serializationPath);
+        }else{
+            metaData =  new MetaData(rangesAmount, serializationPath);
+        }
+
+        return metaData;
     }
 
     public void UpdateIndex(int indexToUpdate){
@@ -24,8 +49,13 @@ public class MetaData implements Serializable {
         return rangesStatus[indexToCheck];
     }
 
+    public boolean IsDownloadFinished() {
+        return !Arrays.asList(rangesStatus).contains(false);
+    }
+
+    //region Serialization
     private void writeToDisk(){
-        try(FileOutputStream fileOutputStream = new FileOutputStream("temp-" + serializationPath);
+        try(FileOutputStream fileOutputStream = new FileOutputStream(tempSerializationPath);
             ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)){
             objectOutputStream.writeObject(this);
         } catch (IOException e) {
@@ -35,11 +65,28 @@ public class MetaData implements Serializable {
         boolean isRenamed = renameFile();
         if(!isRenamed){
             System.err.println("Problem in renaming metadata!");
+        }else{
+            downloadCounter++;
         }
     }
 
+    private static MetaData ReadFromDisk(String serializationPath){
+        MetaData metaData = null;
+        try(FileInputStream fileInputStream = new FileInputStream(serializationPath);
+            ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)){
+            metaData = (MetaData) objectInputStream.readObject();
+        } catch (FileNotFoundException | ClassNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return metaData;
+    }
+    //endregion Serialization
+
     private boolean renameFile() {
-        File tmp = new File("temp-" + serializationPath);
+        File tmp = new File(tempSerializationPath);
         Path tmpPath = Paths.get(tmp.getAbsolutePath());
         boolean isRenamed = true;
 
@@ -53,17 +100,7 @@ public class MetaData implements Serializable {
         return isRenamed;
     }
 
-    public static MetaData ReadFromDisk(String serializationPath){
-        MetaData metaData = null;
-        try(FileInputStream fileInputStream = new FileInputStream(serializationPath);
-            ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)){
-            metaData = (MetaData) objectInputStream.readObject();
-        } catch (FileNotFoundException | ClassNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return metaData;
+    public int GetDownloadCounter(){
+        return downloadCounter;
     }
 }

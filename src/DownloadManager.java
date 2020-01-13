@@ -5,14 +5,13 @@ import java.net.HttpURLConnection;
 import java.util.ArrayList;
 import java.util.List;
 import java.net.URL;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 
 public class DownloadManager {
     //region Fields
-    private static final int BUFFER_SIZE = 1024;  // Each download packet size
+    private static final int BUFFER_SIZE = 8092 * 1024;  // Each download packet size
     private final String serializationPath = "MetaData.ser";  // Path to save MetaDataFile
     private List<URL> urlsList;
     private LinkedBlockingDeque<DataWrapper> packetDataQueue;
@@ -20,7 +19,10 @@ public class DownloadManager {
     private ExecutorService packetDownloaderPool;
     private MetaData metaData;
     long fileSize;
+    static List<Pair<Long, Long>> packetPositionsPairs;
     // endregion
+
+    private static DownloadManager downloadManager;
 
     //region Constructor
     public DownloadManager(List<URL> urlList, int numberOfThreads) {
@@ -32,41 +34,56 @@ public class DownloadManager {
 
     //region Public methods
     public void run() {
-        fileSize = this.getFileSize();
+        this.fileSize = this.getFileSize();
 
         if (fileSize == -1) {
             System.err.println("Download fail, fail to establish connection with server to get file size");
             return;
         }
 
-        initMetaData();
-        initPacketWriteThread();
+        this.initMetaData();
+        this.initPacketWriteThread();
 
-        List<Pair<Long, Long>> packetPositionsList = this.getPacketsRanges();
+        packetPositionsPairs = this.getPacketsRanges();
         int urlIndex = 0;
+        int packetIndex = 0;
+        for (Pair<Long, Long> packetPositions : packetPositionsPairs) {
+            boolean isPacketDownloaded = metaData.IsIndexDownloaded(packetIndex);
 
-        for (Pair<Long, Long> packetPositions : packetPositionsList) {
-            URL url = this.urlsList.get(urlIndex);
-            Long packetStartPosition = packetPositions.getKey();
-            Long packetEndPosition = packetPositions.getValue();
-            PacketDownloader packetDownloader = new PacketDownloader(this.packetDataQueue, url, packetStartPosition, packetEndPosition, fileSize);
+            if(!isPacketDownloaded) {
+                URL url = this.urlsList.get(urlIndex);
+                Long packetStartPosition = packetPositions.getKey();
+                Long packetEndPosition = packetPositions.getValue();
+                PacketDownloader packetDownloader = new PacketDownloader(this.packetDataQueue, url,
+                        packetStartPosition, packetEndPosition, fileSize, packetIndex);
 
-            this.packetDownloaderPool.execute(packetDownloader);
-            urlIndex = this.getNextUrlIndex(urlIndex);
+                this.packetDownloaderPool.execute(packetDownloader);
+                urlIndex = this.getNextUrlIndex(urlIndex);
+            }
+
+            packetIndex++;
+        }
+    }
+
+    // TODO: consider a better way to bring this data
+    public static long GetIndexStartPosition(int packetIndex) throws Exception {
+        if(packetPositionsPairs != null) {
+            return packetPositionsPairs.get(packetIndex).getKey();
+        }else {
+            throw new Exception("Object referenced before assignment, Please run DownloadManager first");
         }
     }
     // endregion
 
     // region Private methods
     private void initPacketWriteThread() {
-        packetWrite = new PacketWrite(packetDataQueue, metaData);
+        packetWrite = new PacketWrite(packetDataQueue, metaData, "tempName"); // TODO: change to the right name
         Thread packetWriteThread = new Thread(packetWrite);
         packetWriteThread.start();
     }
 
     private void initMetaData() {
-        // TODO: when initialize metaData to check if need to create a new one or just read from the disk
-        metaData = new MetaData(getRangesAmount(), serializationPath);
+        metaData = MetaData.GetMetaData(getRangesAmount(), serializationPath);
     }
 
     private long getFileSize() {
@@ -100,8 +117,6 @@ public class DownloadManager {
         List<Pair<Long, Long>> packetRanges = new ArrayList<>();
 
         for(int i =0; i < getRangesAmount(); i++){
-//            long packetStartPosition = i * BUFFER_SIZE;
-
             packetRanges.add(get_byte_range(i));
         }
 
@@ -112,18 +127,13 @@ public class DownloadManager {
         return currentIndex < this.urlsList.size() - 1 ? ++currentIndex : 0;
     }
 
-    /**
-     * This function create the string of the range which is the value of the Content-Range header of the http request
-     *
-     * @return String, the value of the Content-Range header
-     */
     private Pair<Long, Long> get_byte_range(long packetStartPosition) {
         long packetStartByte = packetStartPosition * BUFFER_SIZE;
-        long packetEndByte = packetStartByte + BUFFER_SIZE;
+        long packetEndByte = packetStartByte + BUFFER_SIZE - 1;
         boolean isRangeValid = packetEndByte < this.fileSize;
         packetEndByte = isRangeValid ? packetEndByte : this.fileSize;
 
-        return new Pair<Long, Long>(packetStartByte ,packetEndByte);
+        return new Pair<Long, Long>(packetStartByte, packetEndByte);
     }
     //endregion
 }

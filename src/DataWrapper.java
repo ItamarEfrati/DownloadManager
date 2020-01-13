@@ -1,15 +1,21 @@
 
 public class DataWrapper {
 
+    public int getPacketIndex() {
+        return packetIndex;
+    }
+
+    private final int packetIndex;
     //region Fields
     private long packetNumber;
     private byte[] packet;
     //endregion
 
     //region Constructor
-    public DataWrapper(long packetNumber, byte[] packet){
+    public DataWrapper(int packetIndex, long packetNumber, byte[] packet){
         this.packetNumber = packetNumber;
         this.packet = packet;
+        this.packetIndex = packetIndex;
     }
     //endregion
 

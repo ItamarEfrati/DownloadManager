@@ -6,6 +6,7 @@ import java.net.URL;
 import java.util.concurrent.LinkedBlockingDeque;
 
 public class PacketDownloader implements Runnable {
+    private final int packetIndex;
     //region Fields
     private LinkedBlockingDeque<DataWrapper> packetQueue;
     private URL source;
@@ -17,12 +18,13 @@ public class PacketDownloader implements Runnable {
     //region Constructor
 
     PacketDownloader(LinkedBlockingDeque<DataWrapper> packetQueue, URL source,
-                     long packetStartPosition, long packetEndPosition, long fileSize) {
+                     long packetStartPosition, long packetEndPosition, long fileSize, int packetIndex) {
         this.packetQueue = packetQueue;
         this.source = source;
         this.packetStartPosition = packetStartPosition;
         this.packetEndPosition = packetEndPosition;
         this.fileSize = fileSize;
+        this.packetIndex = packetIndex;
     }
     //endregion
 
@@ -60,13 +62,14 @@ public class PacketDownloader implements Runnable {
             } catch (ProtocolException e) {
                 System.err.printf("Fail to execute http request to %s, wrong request method\n", this.source.toString());
             }
-            httpConnection.setRequestProperty("Content-Range", range);
+            httpConnection.setRequestProperty("Range", range);
             int responseCode = httpConnection.getResponseCode();
-            inputStream = responseCode == HttpURLConnection.HTTP_OK ? httpConnection.getInputStream() : null;
+            inputStream = responseCode == HttpURLConnection.HTTP_PARTIAL ? httpConnection.getInputStream() : null;
 
         } catch (IOException e) {
             System.err.printf("Fail to execute http request to %s\n", this.source.toString());
         }
+
         return inputStream;
     }
 
@@ -78,7 +81,7 @@ public class PacketDownloader implements Runnable {
     private void downloadPacket(InputStream inputStream) {
         try {
             byte[] buffer = inputStream.readAllBytes();
-            DataWrapper dataWrapper = new DataWrapper(this.packetStartPosition, buffer);
+            DataWrapper dataWrapper = new DataWrapper(packetIndex, packetStartPosition, buffer);
             this.packetQueue.add(dataWrapper);
         } catch (IOException e) {
             System.err.printf("Fail to download packet %d from %s\n", this.packetStartPosition, this.source.toString());
@@ -86,7 +89,7 @@ public class PacketDownloader implements Runnable {
     }
 
     private String get_byte_range(){
-        return String.format("bytes %d-%d/%d", packetStartPosition, packetEndPosition, this.fileSize);
+        return String.format("Bytes=%d-%d", packetStartPosition, packetEndPosition);
     }
     //endregion
 }
