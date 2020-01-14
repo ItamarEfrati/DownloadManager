@@ -1,5 +1,3 @@
-import javafx.util.Pair;
-
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.ArrayList;
@@ -11,7 +9,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 
 public class DownloadManager {
     //region Fields
-    private static final int BUFFER_SIZE = 8092 * 1024;  // Each download packet size
+    private static final int BUFFER_SIZE = 8092 * 64;  // Each download packet size
     private final String serializationPath = "MetaData.ser";  // Path to save MetaDataFile
     private List<URL> urlsList;
     private LinkedBlockingDeque<DataWrapper> packetDataQueue;
@@ -19,7 +17,7 @@ public class DownloadManager {
     private ExecutorService packetDownloaderPool;
     private MetaData metaData;
     long fileSize;
-    static List<Pair<Long, Long>> packetPositionsPairs;
+    static List<long[]> packetPositionsPairs;
     // endregion
 
     private static DownloadManager downloadManager;
@@ -42,18 +40,18 @@ public class DownloadManager {
         }
 
         this.initMetaData();
-        this.initPacketWriteThread();
+        Thread writerThread = this.initPacketWriteThread();
 
         packetPositionsPairs = this.getPacketsRanges();
         int urlIndex = 0;
         int packetIndex = 0;
-        for (Pair<Long, Long> packetPositions : packetPositionsPairs) {
+        for (long[] packetPositions : packetPositionsPairs) {
             boolean isPacketDownloaded = metaData.IsIndexDownloaded(packetIndex);
 
-            if(!isPacketDownloaded) {
+            if (!isPacketDownloaded) {
                 URL url = this.urlsList.get(urlIndex);
-                Long packetStartPosition = packetPositions.getKey();
-                Long packetEndPosition = packetPositions.getValue();
+                Long packetStartPosition = packetPositions[0];
+                Long packetEndPosition = packetPositions[1];
                 PacketDownloader packetDownloader = new PacketDownloader(this.packetDataQueue, url,
                         packetStartPosition, packetEndPosition, fileSize, packetIndex);
 
@@ -63,23 +61,31 @@ public class DownloadManager {
 
             packetIndex++;
         }
+
+        this.packetDownloaderPool.shutdown();
+        try {
+            writerThread.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
     // TODO: consider a better way to bring this data
     public static long GetIndexStartPosition(int packetIndex) throws Exception {
-        if(packetPositionsPairs != null) {
-            return packetPositionsPairs.get(packetIndex).getKey();
-        }else {
+        if (packetPositionsPairs != null) {
+            return packetPositionsPairs.get(packetIndex)[0];
+        } else {
             throw new Exception("Object referenced before assignment, Please run DownloadManager first");
         }
     }
     // endregion
 
     // region Private methods
-    private void initPacketWriteThread() {
+    private Thread initPacketWriteThread() {
         packetWrite = new PacketWrite(packetDataQueue, metaData, "tempName"); // TODO: change to the right name
         Thread packetWriteThread = new Thread(packetWrite);
         packetWriteThread.start();
+        return packetWriteThread;
     }
 
     private void initMetaData() {
@@ -102,21 +108,21 @@ public class DownloadManager {
     }
 
     private int getRangesAmount() {
-        int rangesAmount =  (int) (fileSize / BUFFER_SIZE);
+        int rangesAmount = (int) (fileSize / BUFFER_SIZE);
         long lastIndexReminder = fileSize % (long) BUFFER_SIZE;
         boolean isReminderExists = lastIndexReminder != 0;
 
-        if(isReminderExists){
+        if (isReminderExists) {
             rangesAmount++;
         }
 
         return rangesAmount;
     }
 
-    private List<Pair<Long, Long>> getPacketsRanges() {
-        List<Pair<Long, Long>> packetRanges = new ArrayList<>();
+    private List<long[]> getPacketsRanges() {
+        List<long[]> packetRanges = new ArrayList<>();
 
-        for(int i =0; i < getRangesAmount(); i++){
+        for (int i = 0; i < getRangesAmount(); i++) {
             packetRanges.add(get_byte_range(i));
         }
 
@@ -127,13 +133,13 @@ public class DownloadManager {
         return currentIndex < this.urlsList.size() - 1 ? ++currentIndex : 0;
     }
 
-    private Pair<Long, Long> get_byte_range(long packetStartPosition) {
+    private long[] get_byte_range(long packetStartPosition) {
         long packetStartByte = packetStartPosition * BUFFER_SIZE;
         long packetEndByte = packetStartByte + BUFFER_SIZE - 1;
         boolean isRangeValid = packetEndByte < this.fileSize;
         packetEndByte = isRangeValid ? packetEndByte : this.fileSize;
 
-        return new Pair<Long, Long>(packetStartByte, packetEndByte);
+        return new long[]{packetStartByte, packetEndByte};
     }
     //endregion
 }
