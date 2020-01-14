@@ -10,13 +10,14 @@ public class MetaData implements Serializable {
     private String tempSerializationPath;
     private String serializationPath;
     private Boolean[] rangesStatus;
-    private int downloadCounter = 0;
+    private int downloadCounter;
     //endregion Fields
 
     private MetaData(int rangesAmount, String serializationPath){
-        rangesStatus = initRangesStatus(rangesAmount);
+        this.rangesStatus = initRangesStatus(rangesAmount);
         this.serializationPath = serializationPath;
-        tempSerializationPath = "temp-" + this.serializationPath;
+        this.tempSerializationPath =  this.serializationPath + "-temp";
+        this.downloadCounter = 0;
     }
 
     private Boolean[] initRangesStatus(int rangesAmount) {
@@ -28,8 +29,8 @@ public class MetaData implements Serializable {
     }
 
     public static MetaData GetMetaData(int rangesAmount, String serializationPath){
-        MetaData metaData = null;
-        File metaDataFile = new File(serializationPath);
+        MetaData metaData;
+        File metaDataFile = new File(serializationPath).getAbsoluteFile();
         boolean isDownloadResumed = metaDataFile.exists();
 
         if(isDownloadResumed){
@@ -62,13 +63,13 @@ public class MetaData implements Serializable {
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-        boolean isRenamed = renameFile();
-        if(!isRenamed){
-            System.err.println("Problem in renaming metadata!");
-        }else{
-            downloadCounter++;
-        }
+        this.downloadCounter++;
+        this.renameFile();
+//        if(!isRenamed){
+//            System.err.println("Problem in renaming metadata!");
+//        }else{
+//            downloadCounter++;
+//        }
     }
 
     private static MetaData ReadFromDisk(String serializationPath){
@@ -86,22 +87,31 @@ public class MetaData implements Serializable {
     }
     //endregion Serialization
 
-    private boolean renameFile() {
+    private void renameFile() {
         File tmp = new File(tempSerializationPath);
         Path tmpPath = Paths.get(tmp.getAbsolutePath());
-        boolean isRenamed = true;
-
-        try {
-            Files.move(tmpPath, tmpPath.resolveSibling(serializationPath), StandardCopyOption.ATOMIC_MOVE);
-        } catch (IOException e) {
-            System.err.println(e.getMessage());
-            isRenamed = false;
+        File destination = new File(serializationPath).getAbsoluteFile();
+        Path destinationPath = Paths.get(destination.getAbsolutePath());
+        boolean isRenamed = false;
+        while(!isRenamed){
+            try {
+                Files.move(tmpPath, destinationPath, StandardCopyOption.ATOMIC_MOVE);
+                isRenamed = true;
+            } catch (IOException ignored) { }
         }
-
-        return isRenamed;
     }
 
     public int GetDownloadCounter(){
-        return downloadCounter;
+        return this.downloadCounter;
+    }
+
+    public int GetNumberOfPackets() {return this.rangesStatus.length;}
+
+    public void deleteMetaDataFile() {
+        File metadataFile = new File(this.serializationPath);
+        boolean isDeleted = metadataFile.delete();
+        if(!isDeleted){
+            System.err.printf("Fail to delete metadata file %s\n", this.serializationPath);
+        }
     }
 }

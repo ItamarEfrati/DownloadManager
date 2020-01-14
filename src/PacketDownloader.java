@@ -6,32 +6,41 @@ import java.net.URL;
 import java.util.concurrent.LinkedBlockingDeque;
 
 public class PacketDownloader implements Runnable {
-    private final int packetIndex;
+
     //region Fields
+    private final int packetIndex;
     private LinkedBlockingDeque<DataWrapper> packetQueue;
     private URL source;
     private long packetStartPosition;
     private long packetEndPosition;
-    private long fileSize;
     //endregion
 
     //region Constructor
 
     PacketDownloader(LinkedBlockingDeque<DataWrapper> packetQueue, URL source,
-                     long packetStartPosition, long packetEndPosition, long fileSize, int packetIndex) {
+                     long packetStartPosition, long packetEndPosition, int packetIndex) {
         this.packetQueue = packetQueue;
         this.source = source;
         this.packetStartPosition = packetStartPosition;
         this.packetEndPosition = packetEndPosition;
-        this.fileSize = fileSize;
         this.packetIndex = packetIndex;
     }
     //endregion
 
     //region Public Methods
+
+    /**
+     * Handles the given packet by type
+     */
     @Override
     public void run() {
-        this.handlePacket();
+        boolean isDataPacket = this.checkPacket();
+        if(isDataPacket){
+            this.handleDataPacket();
+        }
+        else{
+            this.handlePoisonPill();
+        }
     }
 
     //endregion
@@ -39,9 +48,26 @@ public class PacketDownloader implements Runnable {
     //region Private Methods
 
     /**
-     * This function handles the execution of the http request to the server and download the relevant packet
+     * Check the type of the packet
+     * @return true if data packet otherwise false (if poison pill packet)
      */
-    private void handlePacket() {
+    private boolean checkPacket() {
+        return this.packetIndex != -1;
+    }
+
+    /**
+     * Handle packet of type poison pill. Create a message of type DataWrapper and push it to the queue. When the
+     * writer will receive this packet it will now that the PacketDownloaders finish to handle all their tasks and it can
+     * terminate.
+     */
+    private void handlePoisonPill(){
+        DataWrapper poisonPill = new DataWrapper(-1, -1, null);
+        this.packetQueue.add(poisonPill);
+    }
+    /**
+     * Handle a data type packet by creating a request for the data and put the data in the queue
+     */
+    private void handleDataPacket() {
         InputStream inputStream = this.executeContentRangeRequest();
         if (inputStream != null) {
             this.downloadPacket(inputStream);
@@ -49,7 +75,7 @@ public class PacketDownloader implements Runnable {
     }
 
     /**
-     * This functoin execute a GET request to the source url with the Content-Range header to download a specific packet
+     * Execute a GET request to the source url with the Content-Range header to download a specific packet
      * @return InputStream, an open inputStream to the source url
      */
     private InputStream executeContentRangeRequest() {
@@ -74,7 +100,7 @@ public class PacketDownloader implements Runnable {
     }
 
     /**
-     * This function download the bytes of the packet from the url, create a data wrapper and insert the data wrapper
+     * Download the bytes of the packet from the url, create a data wrapper and insert the data wrapper
      * to the packets queue
      * @param inputStream, and open input stream to the url
      */
@@ -88,6 +114,10 @@ public class PacketDownloader implements Runnable {
         }
     }
 
+    /**
+     * Create a string which is the value of the range header in the http request
+     * @return string represent the range by the format of the request
+     */
     private String get_byte_range(){
         return String.format("Bytes=%d-%d", packetStartPosition, packetEndPosition);
     }

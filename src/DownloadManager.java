@@ -9,59 +9,47 @@ import java.util.concurrent.LinkedBlockingDeque;
 
 public class DownloadManager {
     //region Fields
-    private static final int BUFFER_SIZE = 8092 * 64;  // Each download packet size
-    private final String serializationPath = "MetaData.ser";  // Path to save MetaDataFile
+    private static final int BUFFER_SIZE = 8096 * 1024;  // Each download packet size
+    private static final String serializationPath = "MetaData.ser";  // Path to save MetaDataFile
     private List<URL> urlsList;
     private LinkedBlockingDeque<DataWrapper> packetDataQueue;
-    private PacketWrite packetWrite;
     private ExecutorService packetDownloaderPool;
     private MetaData metaData;
-    long fileSize;
-    static List<long[]> packetPositionsPairs;
+    private long fileSize;
+    private static List<long[]> packetPositionsPairs;
+    private int urlIndex;
     // endregion
-
-    private static DownloadManager downloadManager;
 
     //region Constructor
     public DownloadManager(List<URL> urlList, int numberOfThreads) {
         this.urlsList = urlList;
         this.packetDataQueue = new LinkedBlockingDeque<>();
         this.packetDownloaderPool = Executors.newFixedThreadPool(numberOfThreads);
+        this.urlIndex = 0;
     }
     //endregion
 
     //region Public methods
+
+    /**
+     * Initiate a download process of a single file which includes accumulating download tasks to a packet downloaders
+     * pool and running a packet writer thread that write the downloaded packets to the destination file.
+     */
     public void run() {
         this.fileSize = this.getFileSize();
-
-        if (fileSize == -1) {
+        boolean isConnectionEstablish = fileSize != -1;
+        if (!isConnectionEstablish) {
             System.err.println("Download fail, fail to establish connection with server to get file size");
             return;
         }
-
-        this.initMetaData();
-        Thread writerThread = this.initPacketWriteThread();
-
+        String url = this.urlsList.get(0).toString();
+        String destinationFileName = url.substring( url.lastIndexOf('/')+1, url.length() );
+        String destinationFilePath = "downloads" + System.getProperty("file.separator") + destinationFileName;
+        this.initMetaData(destinationFilePath);
         packetPositionsPairs = this.getPacketsRanges();
-        int urlIndex = 0;
-        int packetIndex = 0;
-        for (long[] packetPositions : packetPositionsPairs) {
-            boolean isPacketDownloaded = metaData.IsIndexDownloaded(packetIndex);
 
-            if (!isPacketDownloaded) {
-                URL url = this.urlsList.get(urlIndex);
-                Long packetStartPosition = packetPositions[0];
-                Long packetEndPosition = packetPositions[1];
-                PacketDownloader packetDownloader = new PacketDownloader(this.packetDataQueue, url,
-                        packetStartPosition, packetEndPosition, fileSize, packetIndex);
-
-                this.packetDownloaderPool.execute(packetDownloader);
-                urlIndex = this.getNextUrlIndex(urlIndex);
-            }
-
-            packetIndex++;
-        }
-
+        Thread writerThread = this.initPacketWriteThread(destinationFilePath);
+        accumulatePackets();
         this.packetDownloaderPool.shutdown();
         try {
             writerThread.join();
@@ -70,32 +58,92 @@ public class DownloadManager {
         }
     }
 
-    // TODO: consider a better way to bring this data
-    public static long GetIndexStartPosition(int packetIndex) throws Exception {
-        if (packetPositionsPairs != null) {
-            return packetPositionsPairs.get(packetIndex)[0];
-        } else {
-            throw new Exception("Object referenced before assignment, Please run DownloadManager first");
-        }
-    }
+
+
     // endregion
 
     // region Private methods
-    private Thread initPacketWriteThread() {
-        packetWrite = new PacketWrite(packetDataQueue, metaData, "tempName"); // TODO: change to the right name
+
+    /**
+     * Accumulates tasks for the thread pool of the packet downloaders. At the end create a poison pill task to inform
+     * the writer that all task are done.
+     */
+    private void accumulatePackets() {
+        int packetIndex = 0;
+        for (long[] packetPositions : packetPositionsPairs) {
+            boolean isPacketDownloaded = metaData.IsIndexDownloaded(packetIndex);
+            if (!isPacketDownloaded) {
+                createTask(packetIndex, packetPositions);
+            }
+
+            packetIndex++;
+        }
+
+        insertPoisonPill();
+    }
+
+    /**
+     * Create a new task to the packet downloaders pool.
+     * @param packetIndex the index of the packet
+     * @param packetPositions long array where at index 0 is the start byte of the packet and index 1 is the end byte of
+     *                        the packet
+     */
+    private void createTask(int packetIndex, long[] packetPositions) {
+        URL url = this.urlsList.get(urlIndex);
+        Long packetStartPosition = packetPositions[0];
+        Long packetEndPosition = packetPositions[1];
+        PacketDownloader packetDownloader = new PacketDownloader(this.packetDataQueue, url,
+                packetStartPosition, packetEndPosition, packetIndex);
+
+        this.packetDownloaderPool.execute(packetDownloader);
+        this.setNextUrlIndex();
+    }
+
+    /**
+     * Creates a poison pill task and insert it to the thread pool
+     */
+    private void insertPoisonPill() {
+        PacketDownloader packetDownloader = new PacketDownloader(this.packetDataQueue, null,
+                -1, -1, -1);
+        this.packetDownloaderPool.execute(packetDownloader);
+    }
+
+//    // TODO: consider a better way to bring this data
+//    public static long GetIndexStartPosition(int packetIndex) throws Exception {
+//        if (packetPositionsPairs != null) {
+//            return packetPositionsPairs.get(packetIndex)[0];
+//        } else {
+//            throw new Exception("Object referenced before assignment, Please run DownloadManager first");
+//        }
+//    }
+
+    /**
+     * Initiate the packet writer thread
+     * @return the thread object of the packet writer
+     */
+    private Thread initPacketWriteThread(String destinationFileName) {
+        PacketWriter packetWrite = new PacketWriter(packetDataQueue, metaData, destinationFileName);
         Thread packetWriteThread = new Thread(packetWrite);
         packetWriteThread.start();
         return packetWriteThread;
     }
 
-    private void initMetaData() {
-        metaData = MetaData.GetMetaData(getRangesAmount(), serializationPath);
+    /**
+     * Initiate a meta data object.
+     */
+    private void initMetaData(String destinationFilePath) {
+        destinationFilePath += serializationPath;
+        this.metaData = MetaData.GetMetaData(getRangesAmount(), destinationFilePath);
     }
 
+    /**
+     * Create a http get request to get the size in bytes of the requested download file.
+     * @return the size of the file in bytes
+     */
     private long getFileSize() {
         long fileSize = -1;
         for (URL url : this.urlsList) {
-            HttpURLConnection httpConnection = null;
+            HttpURLConnection httpConnection;
             try {
                 httpConnection = (HttpURLConnection) url.openConnection();
                 httpConnection.setRequestMethod("HEAD");
@@ -107,6 +155,10 @@ public class DownloadManager {
         return fileSize;
     }
 
+    /**
+     * Calculate the amount of packet that are needed in order to download the file
+     * @return int, the amount of ranges
+     */
     private int getRangesAmount() {
         int rangesAmount = (int) (fileSize / BUFFER_SIZE);
         long lastIndexReminder = fileSize % (long) BUFFER_SIZE;
@@ -119,6 +171,10 @@ public class DownloadManager {
         return rangesAmount;
     }
 
+    /**
+     * Craete a list that contains all the ranges of the packets of the file
+     * @return the list of the ranges
+     */
     private List<long[]> getPacketsRanges() {
         List<long[]> packetRanges = new ArrayList<>();
 
@@ -129,10 +185,18 @@ public class DownloadManager {
         return packetRanges;
     }
 
-    private int getNextUrlIndex(int currentIndex) {
-        return currentIndex < this.urlsList.size() - 1 ? ++currentIndex : 0;
+    /**
+     * Sets the next index that will choose the next url to download a packet from
+     */
+    private void setNextUrlIndex() {
+        this.urlIndex = this.urlIndex < this.urlsList.size() - 1 ? ++this.urlIndex : 0;
     }
 
+    /**
+     * Calculate the range (start byte and end byte) of a given packet
+     * @param packetStartPosition the index of the packet
+     * @return array where at index 0 is the starting byte range and in index 1 the end byte range
+     */
     private long[] get_byte_range(long packetStartPosition) {
         long packetStartByte = packetStartPosition * BUFFER_SIZE;
         long packetEndByte = packetStartByte + BUFFER_SIZE - 1;
