@@ -28,7 +28,7 @@ public class MetaData implements Serializable {
     }
 
     public static MetaData GetMetaData(int rangesAmount, String serializationPath){
-        MetaData metaData = null;*
+        MetaData metaData = null;
         File metaDataFile = new File(serializationPath);
         boolean isDownloadResumed = metaDataFile.exists();
 
