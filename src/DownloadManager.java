@@ -1,3 +1,4 @@
+import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.ArrayList;
@@ -6,11 +7,13 @@ import java.net.URL;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.TimeUnit;
 
 public class DownloadManager {
     //region Fields
     private static final int BUFFER_SIZE = 8096 * 1024;  // Each download packet size
-    private static final String serializationPath = "MetaData.ser";  // Path to save MetaDataFile
+    private static final String SERIALIZATION_PATH = "MetaData.ser";  // Path to save MetaDataFile
+    private static final String DOWNLOAD_DIR_NAME = "downloads";  // Name of the directory to download to
     private List<URL> urlsList;
     private LinkedBlockingDeque<DataWrapper> packetDataQueue;
     private ExecutorService packetDownloaderPool;
@@ -44,7 +47,8 @@ public class DownloadManager {
         }
         String url = this.urlsList.get(0).toString();
         String destinationFileName = url.substring( url.lastIndexOf('/')+1, url.length() );
-        String destinationFilePath = "downloads" + System.getProperty("file.separator") + destinationFileName;
+        createDownloadDir();
+        String destinationFilePath = DOWNLOAD_DIR_NAME + System.getProperty("file.separator") + destinationFileName;
         this.initMetaData(destinationFilePath);
         packetPositionsPairs = this.getPacketsRanges();
 
@@ -52,18 +56,31 @@ public class DownloadManager {
         accumulatePackets();
         this.packetDownloaderPool.shutdown();
         try {
+            packetDownloaderPool.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+            insertPoisonPill();
             writerThread.join();
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
 
+    private void createDownloadDir() {
+        File downloadDir = new File(DOWNLOAD_DIR_NAME);
+        boolean isDownloadDirExists = downloadDir.exists();
 
+        if(!isDownloadDirExists){
+            isDownloadDirExists = downloadDir.mkdir();
+        }
 
+        // TODO: find the right way to handle this
+        if(!isDownloadDirExists){
+            System.err.println("Problem in initialization of " + DOWNLOAD_DIR_NAME + " directory");
+            return;
+        }
+    }
     // endregion
 
     // region Private methods
-
     /**
      * Accumulates tasks for the thread pool of the packet downloaders. At the end create a poison pill task to inform
      * the writer that all task are done.
@@ -78,8 +95,6 @@ public class DownloadManager {
 
             packetIndex++;
         }
-
-        insertPoisonPill();
     }
 
     /**
@@ -103,19 +118,10 @@ public class DownloadManager {
      * Creates a poison pill task and insert it to the thread pool
      */
     private void insertPoisonPill() {
-        PacketDownloader packetDownloader = new PacketDownloader(this.packetDataQueue, null,
-                -1, -1, -1);
-        this.packetDownloaderPool.execute(packetDownloader);
-    }
+        DataWrapper poisonPill = new DataWrapper(-1, -1, null);
 
-//    // TODO: consider a better way to bring this data
-//    public static long GetIndexStartPosition(int packetIndex) throws Exception {
-//        if (packetPositionsPairs != null) {
-//            return packetPositionsPairs.get(packetIndex)[0];
-//        } else {
-//            throw new Exception("Object referenced before assignment, Please run DownloadManager first");
-//        }
-//    }
+        packetDataQueue.add(poisonPill);
+    }
 
     /**
      * Initiate the packet writer thread
@@ -132,7 +138,7 @@ public class DownloadManager {
      * Initiate a meta data object.
      */
     private void initMetaData(String destinationFilePath) {
-        destinationFilePath += serializationPath;
+        destinationFilePath += SERIALIZATION_PATH;
         this.metaData = MetaData.GetMetaData(getRangesAmount(), destinationFilePath);
     }
 
@@ -141,6 +147,7 @@ public class DownloadManager {
      * @return the size of the file in bytes
      */
     private long getFileSize() {
+        // TODO: why loop?
         long fileSize = -1;
         for (URL url : this.urlsList) {
             HttpURLConnection httpConnection;

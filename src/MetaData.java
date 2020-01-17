@@ -57,19 +57,23 @@ public class MetaData implements Serializable {
 
     //region Serialization
     private void writeToDisk(){
+        boolean isDataWroteToDisk = false;
         try(FileOutputStream fileOutputStream = new FileOutputStream(tempSerializationPath);
             ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)){
             objectOutputStream.writeObject(this);
+            isDataWroteToDisk = true;
         } catch (IOException e) {
             e.printStackTrace();
         }
-        this.downloadCounter++;
-        this.renameFile();
-//        if(!isRenamed){
-//            System.err.println("Problem in renaming metadata!");
-//        }else{
-//            downloadCounter++;
-//        }
+
+        if(isDataWroteToDisk) {
+           boolean isMetaDataRenamed = this.renameFile();
+           if(isMetaDataRenamed){
+               this.downloadCounter++;
+           }else{
+               System.err.println("problem in renaming the meta data");
+           }
+        }
     }
 
     private static MetaData ReadFromDisk(String serializationPath){
@@ -77,9 +81,7 @@ public class MetaData implements Serializable {
         try(FileInputStream fileInputStream = new FileInputStream(serializationPath);
             ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)){
             metaData = (MetaData) objectInputStream.readObject();
-        } catch (FileNotFoundException | ClassNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
+        } catch (ClassNotFoundException | IOException e) {
             e.printStackTrace();
         }
 
@@ -87,18 +89,20 @@ public class MetaData implements Serializable {
     }
     //endregion Serialization
 
-    private void renameFile() {
+    private boolean renameFile() {
         File tmp = new File(tempSerializationPath);
         Path tmpPath = Paths.get(tmp.getAbsolutePath());
         File destination = new File(serializationPath).getAbsoluteFile();
         Path destinationPath = Paths.get(destination.getAbsolutePath());
         boolean isRenamed = false;
-        while(!isRenamed){
-            try {
-                Files.move(tmpPath, destinationPath, StandardCopyOption.ATOMIC_MOVE);
-                isRenamed = true;
-            } catch (IOException ignored) { }
+        try {
+            Files.move(tmpPath, destinationPath, StandardCopyOption.ATOMIC_MOVE);
+            isRenamed = true;
+        } catch (IOException ignored) {
+            System.err.println(ignored.getMessage());
         }
+
+        return isRenamed;
     }
 
     public int GetDownloadCounter(){

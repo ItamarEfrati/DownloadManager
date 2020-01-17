@@ -8,7 +8,7 @@ import java.util.Scanner;
 public class IdcDm {
     public static List<URL> parseArguments(String urlArgument) {
         List<URL> urlsList = new ArrayList<>();
-        boolean isUrlList = !urlArgument.startsWith("http://");
+        boolean isUrlList = !urlArgument.startsWith("http://") && !urlArgument.startsWith("https://");
 
         try {
             if (isUrlList) {
@@ -31,6 +31,9 @@ public class IdcDm {
     }
 
     public static void main(String[] args) {
+        // TODO: "https://archive.org/download/Mario1_500/ Mario1_500.avi" the ling is not vakid when there is a space
+        // but this is the link from them example, how to handle it?
+        // TODO: handke exception all ver the program, to make sure the program is terminated
         int numberOfThreads = 0;
         List<URL> urlsList = null;
         boolean isNumOfThreadProvided = args.length == 2;

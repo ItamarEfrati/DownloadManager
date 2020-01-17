@@ -35,6 +35,7 @@ public class PacketDownloader implements Runnable {
     @Override
     public void run() {
         boolean isDataPacket = this.checkPacket();
+
         if(isDataPacket){
             this.handleDataPacket();
         }
