@@ -7,6 +7,8 @@ import java.util.concurrent.LinkedBlockingDeque;
 
 public class PacketDownloader implements Runnable {
 
+    private static final int REQUEST_TIME_OUT = 30 * 1000;  // Request for connection life time in MS
+    private static final int READ_TIME_OUT = 30 * 1000;  // Reading connection InputStream life time in MS
     //region Fields
     private final int packetIndex;
     private LinkedBlockingDeque<DataWrapper> packetQueue;
@@ -85,6 +87,8 @@ public class PacketDownloader implements Runnable {
             HttpURLConnection httpConnection = (HttpURLConnection) source.openConnection();
             try {
                 httpConnection.setRequestMethod("GET");
+                httpConnection.setConnectTimeout(REQUEST_TIME_OUT);
+                httpConnection.setReadTimeout(READ_TIME_OUT);
             } catch (ProtocolException e) {
                 System.err.printf("Fail to execute http request to %s, wrong request method\n", this.source.toString());
             }
@@ -106,12 +110,28 @@ public class PacketDownloader implements Runnable {
      */
     private void downloadPacket(InputStream inputStream) {
         try {
+            printStartDownloadMessage();
             byte[] buffer = inputStream.readAllBytes();
             DataWrapper dataWrapper = new DataWrapper(packetIndex, packetStartPosition, buffer);
             this.packetQueue.add(dataWrapper);
+            printFinishedDownloadMessage();
         } catch (IOException e) {
             System.err.printf("Fail to download packet %d from %s\n", this.packetStartPosition, this.source.toString());
         }
+    }
+
+    private void printFinishedDownloadMessage() {
+        System.err.printf("[%s] Finished downloading\n",
+                Thread.currentThread().getId());
+    }
+
+    private void printStartDownloadMessage() {
+        String sb = "";
+        sb += String.format("[%s] Start downloading range (%d- %d) from:\n",
+                Thread.currentThread().getId(), packetStartPosition, packetEndPosition);
+        sb += source;
+
+        System.err.println(sb);
     }
 
     /**

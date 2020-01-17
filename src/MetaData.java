@@ -28,6 +28,14 @@ public class MetaData implements Serializable {
         return bs;
     }
 
+    /***
+     * Method that provided an access to the metaData object
+     * If metaData already exist it will take that object
+     * else it will create new MetaData object
+     * @param rangesAmount packet ranges amount (file size / buffer size)
+     * @param serializationPath name of the file to download
+     * @return MetaData object of the current file download
+     */
     public static MetaData GetMetaData(int rangesAmount, String serializationPath){
         MetaData metaData;
         File metaDataFile = new File(serializationPath).getAbsoluteFile();
@@ -42,6 +50,11 @@ public class MetaData implements Serializable {
         return metaData;
     }
 
+    /***
+     * Update the boolean array of the meta data object
+     * and commit serialization writing
+     * @param indexToUpdate index of the metadata object to update
+     */
     public void UpdateIndex(int indexToUpdate){
         rangesStatus[indexToUpdate] = true;
         writeToDisk();
@@ -56,6 +69,10 @@ public class MetaData implements Serializable {
     }
 
     //region Serialization
+
+    /***
+     * Commit the MetaData serialization writing
+     */
     private void writeToDisk(){
         try(FileOutputStream fileOutputStream = new FileOutputStream(tempSerializationPath);
             ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)){
@@ -65,27 +82,22 @@ public class MetaData implements Serializable {
         }
         this.downloadCounter++;
         this.renameFile();
-//        if(!isRenamed){
-//            System.err.println("Problem in renaming metadata!");
-//        }else{
-//            downloadCounter++;
-//        }
     }
 
+    /***
+     * Commit the MetaData serialization reading
+     */
     private static MetaData ReadFromDisk(String serializationPath){
         MetaData metaData = null;
         try(FileInputStream fileInputStream = new FileInputStream(serializationPath);
             ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)){
             metaData = (MetaData) objectInputStream.readObject();
-        } catch (FileNotFoundException | ClassNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
+        } catch (ClassNotFoundException | IOException e) {
             e.printStackTrace();
         }
 
         return metaData;
     }
-    //endregion Serialization
 
     private void renameFile() {
         File tmp = new File(tempSerializationPath);
@@ -100,6 +112,7 @@ public class MetaData implements Serializable {
             } catch (IOException ignored) { }
         }
     }
+    //endregion Serialization
 
     public int GetDownloadCounter(){
         return this.downloadCounter;

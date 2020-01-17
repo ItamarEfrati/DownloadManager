@@ -91,7 +91,6 @@ public class PacketWriter implements Runnable {
             System.err.printf("Downloaded %d%%\n", this.downloadStatus);
             this.firstPrint = false;
         }
-
     }
 
     /**

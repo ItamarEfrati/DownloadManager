@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 
 public class DownloadManager {
     //region Fields
-    private static final int BUFFER_SIZE = 8096 * 1024;  // Each download packet size
+    private static final int BUFFER_SIZE = 512 * 1000;  // Each download packet size
     private static final String SERIALIZATION_PATH = "MetaData.ser";  // Path to save MetaDataFile
     private static final String DOWNLOAD_DIR_NAME = "downloads";  // Name of the directory to download to
     private List<URL> urlsList;
@@ -41,14 +41,19 @@ public class DownloadManager {
     public void run() {
         this.fileSize = this.getFileSize();
         boolean isConnectionEstablish = fileSize != -1;
+
         if (!isConnectionEstablish) {
             System.err.println("Download fail, fail to establish connection with server to get file size");
             return;
         }
+
         String url = this.urlsList.get(0).toString();
         String destinationFileName = url.substring( url.lastIndexOf('/')+1);
+
         createDownloadDir();
+
         String destinationFilePath = DOWNLOAD_DIR_NAME + System.getProperty("file.separator") + destinationFileName;
+
         this.initMetaData(destinationFilePath);
         packetPositionsPairs = this.getPacketsRanges();
 
@@ -69,6 +74,9 @@ public class DownloadManager {
         }
     }
 
+    /***
+     * Creating the directory to download the file
+     */
     private void createDownloadDir() {
         File downloadDir = new File(DOWNLOAD_DIR_NAME);
         boolean isDownloadDirExists = downloadDir.exists();
@@ -133,6 +141,7 @@ public class DownloadManager {
      */
     private Thread initPacketWriteThread(String destinationFileName) throws IOException {
         PacketWriter packetWrite;
+
         try {
             packetWrite = new PacketWriter(packetDataQueue, metaData, destinationFileName);
         }
@@ -140,7 +149,9 @@ public class DownloadManager {
             System.err.println(e.getMessage());
             throw e;
         }
+
         Thread packetWriteThread = new Thread(packetWrite);
+
         packetWriteThread.start();
         return packetWriteThread;
     }

@@ -1,4 +1,7 @@
-
+/***
+ * This class represent a single downloaded packet
+ * it contains the meta data attributes and the actual downloaded data
+ */
 public class DataWrapper {
 
     //region Fields

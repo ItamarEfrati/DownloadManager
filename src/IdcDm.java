@@ -6,7 +6,14 @@ import java.util.List;
 import java.util.Scanner;
 
 public class IdcDm {
-    public static List<URL> parseArguments(String urlArgument) {
+    /***
+     * Util function to read the urls provided by the user in order to download the File
+     * If a link is provided the List will contain only 1 url
+     * else it will assume that file is provided
+     * @param urlArgument String that represent a url or local path
+     * @return List<URL> of all server links to download from
+     */
+    public static List<URL> parseUrlArgument(String urlArgument) {
         List<URL> urlsList = new ArrayList<>();
         boolean isUrlList = !urlArgument.startsWith("http://") && !urlArgument.startsWith("https://");
 
@@ -47,13 +54,18 @@ public class IdcDm {
         boolean isThreadsArgumentValid = numberOfThreads > 0;
 
         if(isThreadsArgumentValid) {
-            urlsList = parseArguments(args[0]);
+            urlsList = parseUrlArgument(args[0]);
         }
 
         boolean isUrlArgumentValid = urlsList != null && urlsList.size() > 0;
 
         if(isUrlArgumentValid) {
             DownloadManager downloadManager = new DownloadManager(urlsList, numberOfThreads);
+            if(!isNumOfThreadProvided){
+                System.err.println("Downloading...");
+            }else{
+                System.err.printf("Downloading using %d connections...\n", numberOfThreads);
+            }
             downloadManager.run();
         }
     }
