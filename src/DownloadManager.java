@@ -46,13 +46,18 @@ public class DownloadManager {
             return;
         }
         String url = this.urlsList.get(0).toString();
-        String destinationFileName = url.substring( url.lastIndexOf('/')+1, url.length() );
+        String destinationFileName = url.substring( url.lastIndexOf('/')+1);
         createDownloadDir();
         String destinationFilePath = DOWNLOAD_DIR_NAME + System.getProperty("file.separator") + destinationFileName;
         this.initMetaData(destinationFilePath);
         packetPositionsPairs = this.getPacketsRanges();
 
-        Thread writerThread = this.initPacketWriteThread(destinationFilePath);
+        Thread writerThread;
+        try {
+            writerThread = this.initPacketWriteThread(destinationFilePath);
+        } catch (IOException e) {
+            return;
+        }
         accumulatePackets();
         this.packetDownloaderPool.shutdown();
         try {
@@ -75,7 +80,6 @@ public class DownloadManager {
         // TODO: find the right way to handle this
         if(!isDownloadDirExists){
             System.err.println("Problem in initialization of " + DOWNLOAD_DIR_NAME + " directory");
-            return;
         }
     }
     // endregion
@@ -105,8 +109,8 @@ public class DownloadManager {
      */
     private void createTask(int packetIndex, long[] packetPositions) {
         URL url = this.urlsList.get(urlIndex);
-        Long packetStartPosition = packetPositions[0];
-        Long packetEndPosition = packetPositions[1];
+        long packetStartPosition = packetPositions[0];
+        long packetEndPosition = packetPositions[1];
         PacketDownloader packetDownloader = new PacketDownloader(this.packetDataQueue, url,
                 packetStartPosition, packetEndPosition, packetIndex);
 
@@ -127,8 +131,15 @@ public class DownloadManager {
      * Initiate the packet writer thread
      * @return the thread object of the packet writer
      */
-    private Thread initPacketWriteThread(String destinationFileName) {
-        PacketWriter packetWrite = new PacketWriter(packetDataQueue, metaData, destinationFileName);
+    private Thread initPacketWriteThread(String destinationFileName) throws IOException {
+        PacketWriter packetWrite;
+        try {
+            packetWrite = new PacketWriter(packetDataQueue, metaData, destinationFileName);
+        }
+        catch (IOException e){
+            System.err.println(e.getMessage());
+            throw e;
+        }
         Thread packetWriteThread = new Thread(packetWrite);
         packetWriteThread.start();
         return packetWriteThread;

@@ -11,7 +11,7 @@ public class PacketWriter implements Runnable {
     private int downloadStatus;
     private boolean firstPrint;
 
-    PacketWriter(LinkedBlockingDeque<DataWrapper> packetDataQueue, MetaData metaData, String downloadedFileName) {
+    PacketWriter(LinkedBlockingDeque<DataWrapper> packetDataQueue, MetaData metaData, String downloadedFileName) throws IOException {
         this.packetDataQueue = packetDataQueue;
         this.metaData = metaData;
         this.downloadedFilePath = downloadedFileName;
@@ -113,12 +113,13 @@ public class PacketWriter implements Runnable {
     /**
      * Create the destination of the download file if doesn't exists
      */
-    private void createDownloadFile() {
+    private void createDownloadFile() throws IOException {
         File myFile = new File(this.downloadedFilePath);
         try {
-            myFile.createNewFile();
+            boolean ignored = myFile.createNewFile();
         } catch (IOException e) {
             System.err.println("Fail Downloading, could not create new file");
+            throw e;
         }
     }
 
