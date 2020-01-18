@@ -13,7 +13,6 @@ public class DownloadManager {
     //region Fields
     private static final int BUFFER_SIZE = 512 * 1000;  // Each download packet size
     private static final String SERIALIZATION_PATH = "MetaData.ser";  // Path to save MetaDataFile
-    private static final String DOWNLOAD_DIR_NAME = "downloads";  // Name of the directory to download to
     private List<URL> urlsList;
     private LinkedBlockingDeque<DataWrapper> packetDataQueue;
     private ExecutorService packetDownloaderPool;
@@ -48,11 +47,7 @@ public class DownloadManager {
         }
 
         String url = this.urlsList.get(0).toString();
-        String destinationFileName = url.substring( url.lastIndexOf('/')+1);
-
-        createDownloadDir();
-
-        String destinationFilePath = DOWNLOAD_DIR_NAME + System.getProperty("file.separator") + destinationFileName;
+        String destinationFilePath = url.substring( url.lastIndexOf('/')+1);
 
         this.initMetaData(destinationFilePath);
         packetPositionsPairs = this.getPacketsRanges();
@@ -71,23 +66,6 @@ public class DownloadManager {
             writerThread.join();
         } catch (InterruptedException e) {
             e.printStackTrace();
-        }
-    }
-
-    /***
-     * Creating the directory to download the file
-     */
-    private void createDownloadDir() {
-        File downloadDir = new File(DOWNLOAD_DIR_NAME);
-        boolean isDownloadDirExists = downloadDir.exists();
-
-        if(!isDownloadDirExists){
-            isDownloadDirExists = downloadDir.mkdir();
-        }
-
-        // TODO: find the right way to handle this
-        if(!isDownloadDirExists){
-            System.err.println("Problem in initialization of " + DOWNLOAD_DIR_NAME + " directory");
         }
     }
     // endregion
